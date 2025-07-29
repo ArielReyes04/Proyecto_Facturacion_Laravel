@@ -12,6 +12,12 @@ use App\Models\User;
  */
 class AuditLog extends Model
 {
+    /**
+     * Motivo del cambio (eliminación o desactivación)
+     *
+     * @var string|null
+     */
+    public $reason;
     protected $fillable = [
         'user_id',
         'admin_id',

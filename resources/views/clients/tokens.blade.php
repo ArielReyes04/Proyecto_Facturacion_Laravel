@@ -19,9 +19,9 @@
                         <code id="token-text" class="bg-gray-100 px-2 py-1 rounded text-sm text-red-600">
                             {{ session('token_generado') }}
                         </code>
-                        <button onclick="copiarToken()" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                        {{-- <button onclick="copiarToken()" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
                             <i class="fas fa-copy"></i> Copiar
-                        </button>
+                        </button> --}}
                     </div>
                     <p class="text-xs text-red-500 mt-1">¡Cópialo ahora! No volverá a mostrarse.</p>
                 </div>
