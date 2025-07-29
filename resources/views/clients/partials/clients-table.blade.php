@@ -76,6 +76,11 @@
                        title="Editar">
                         <i class="fas fa-edit"></i>
                     </a>
+                    <a href="{{ route('clients.tokens', $client->id) }}" 
+                       class="text-indigo-600 hover:text-indigo-900 transition-colors"
+                       title="Tokens">
+                        <i class="fas fa-key"></i>
+                    </a>
                     <button type="button" 
                             class="text-red-600 hover:text-red-900 transition-colors" 
                             onclick="openDeleteModal({{ $client->id }}, '{{ $client->name }}', '{{ $client->email }}')"

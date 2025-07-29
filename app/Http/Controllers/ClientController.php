@@ -417,4 +417,46 @@ class ClientController extends Controller
 
         return false;
     }
+
+    public function tokens(Request $request, $id)
+    {
+        $client = Client::findOrFail($id);
+
+        $query = $client->tokens();
+
+        // Filtro de búsqueda por nombre del token
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        // Número de registros por página (opcional: puedes permitir cambiarlo por GET)
+        $perPage = $request->input('per_page', 10);
+        $perPage = max(1, min(100, (int) $perPage)); // límite entre 1 y 100 para seguridad
+
+        $tokens = $query->orderBy('created_at', 'desc')
+                        ->paginate($perPage)
+                        ->withQueryString(); // importante para conservar filtros en paginación
+
+        return view('clients.tokens', compact('client', 'tokens'));
+    }
+
+
+
+    public function crearTokenAcceso(Request $request, Client $client)
+    {
+        if (!$client->id) {
+            return redirect()->back()->with('error', 'Cliente inválido');
+        }
+
+        $tokenName = $request->nombre;
+
+        $token = $client->createToken($tokenName);
+        $plainTextToken = $token->plainTextToken;
+
+        return redirect()
+            ->route('clients.tokens', ['id' => $client->id])
+            ->with('token_generado', $plainTextToken);
+    }
+
 }

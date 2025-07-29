@@ -57,6 +57,8 @@ Route::middleware(['auth', 'verified', VerifyActiveUser::class])->group(function
     Route::middleware(['role:Administrador|Secretario'])->group(function () {
         Route::post('/clients/validate-field', [ClientController::class, 'validateField'])->name('clients.validate-field');
         Route::resource('clients', ClientController::class);
+        Route::get('/clients/{id}/tokens', [ClientController::class, 'tokens'])->name('clients.tokens');
+        Route::post('/clients/{client}/token', [ClientController::class, 'crearTokenAcceso'])->name('crearTokenAcceso');
     });
 
     // Rutas de Productos - Administrador y Bodega
