@@ -3,7 +3,7 @@
         <x-slot name="header">
             <div class="flex justify-between items-center">
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                    <i class="fas fa-trash-alt mr-2"></i> Clientes Eliminados
+                    <i class="fas fa-key mr-2"></i> Tokens de Acceso del Cliente: {{ $client->email }}
                 </h2>
                 <a href="{{ route('clients.index') }}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
                     <i class="fas fa-arrow-left"></i> Volver a Clientes
@@ -19,9 +19,9 @@
                         <code id="token-text" class="bg-gray-100 px-2 py-1 rounded text-sm text-red-600">
                             {{ session('token_generado') }}
                         </code>
-                        {{-- <button onclick="copiarToken()" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                        <button onclick="copiarToken()" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
                             <i class="fas fa-copy"></i> Copiar
-                        </button> --}}
+                        </button> 
                     </div>
                     <p class="text-xs text-red-500 mt-1">¡Cópialo ahora! No volverá a mostrarse.</p>
                 </div>
