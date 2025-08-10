@@ -98,12 +98,12 @@ class Invoice extends Model
 
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return $this->status === 'pendiente' || $this->status === 'pagado';
     }
 
     public function isCancelled(): bool
     {
-        return $this->status === 'cancelled';
+        return $this->status === 'cancelado';
     }
 
     public function canBeCancelledBy(User $user): bool

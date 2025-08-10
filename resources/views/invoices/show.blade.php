@@ -66,9 +66,27 @@
                                 <p class="text-sm text-gray-500">{{ $invoice->created_at->format('d/m/Y H:i') }}</p>
                             </div>
                             <div class="text-right">
-                                <span class="px-3 py-1 text-sm font-medium rounded-full {{ $invoice->status == 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                    {{ $invoice->status == 'active' ? 'ACTIVA' : 'CANCELADA' }}
-                                </span>
+                                @php
+                                    $status = $invoice->status;
+                                @endphp
+
+                                @if($status === 'pagado')
+                                    <span class="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">
+                                        <i class="fas fa-check-circle mr-2"></i> Pagada
+                                    </span>
+                                @elseif($status === 'pendiente')
+                                    <span class="px-3 py-1 text-sm font-medium rounded-full bg-yellow-100 text-yellow-800">
+                                        <i class="fas fa-clock mr-2"></i> Pendiente
+                                    </span>
+                                @elseif($status === 'cancelado')
+                                    <span class="px-3 py-1 text-sm font-medium rounded-full bg-red-100 text-red-800">
+                                        <i class="fas fa-times-circle mr-2"></i> Cancelada
+                                    </span>
+                                @else
+                                    <span class="px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-800">
+                                        <i class="fas fa-question-circle mr-2"></i> Estado desconocido
+                                    </span>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -96,24 +114,24 @@
 
                         <div class="bg-gray-50 p-4 rounded-lg">
                             <h3 class="text-lg font-medium text-gray-900 mb-2">Fechas de la Factura</h3>
-                            <p class="text-sm text-gray-700"><strong>Fecha de Emisión:</strong> {{ $invoice->issue_date->format('d/m/Y') }}</p>
-                            <p class="text-sm text-gray-700"><strong>Fecha de Vencimiento:</strong> {{ $invoice->due_date->format('d/m/Y') }}</p>
+                            <p class="text-sm text-gray-700"><strong>Fecha de Emisión:</strong> {{ $invoice->issue_date?->format('d/m/Y') ?? $invoice->created_at->format('d/m/Y') }}</p>
+                            <p class="text-sm text-gray-700"><strong>Fecha de Vencimiento:</strong> {{ $invoice->due_date?->format('d/m/Y') ?? 'No disponible' }}</p>
                             <p class="text-sm text-gray-700"><strong>Estado:</strong> 
-                                @if($invoice->status === 'paid')
+                                @if($status === 'pagado')
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                         <i class="fas fa-check-circle mr-1"></i> Pagada
                                     </span>
-                                @elseif($invoice->status === 'pending')
+                                @elseif($status === 'pendiente')
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         <i class="fas fa-clock mr-1"></i> Pendiente
                                     </span>
-                                @elseif($invoice->status === 'overdue')
+                                @elseif($status === 'cancelado')
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                        <i class="fas fa-exclamation-triangle mr-1"></i> Vencida
+                                        <i class="fas fa-times-circle mr-1"></i> Cancelada
                                     </span>
                                 @else
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        <i class="fas fa-times-circle mr-1"></i> Cancelada
+                                        <i class="fas fa-question-circle mr-1"></i> Estado desconocido
                                     </span>
                                 @endif
                             </p>
@@ -222,6 +240,7 @@
                             </div>
                         </div>
                     @endif
+
                 </div>
             </div>
         </div>

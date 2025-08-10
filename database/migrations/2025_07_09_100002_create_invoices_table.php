@@ -16,7 +16,7 @@ return new class extends Migration
             $table->decimal('subtotal', 10, 2);
             $table->decimal('tax', 10, 2)->default(0);
             $table->decimal('total', 10, 2);
-            $table->enum('status', ['active', 'cancelled'])->default('active');
+            $table->enum('status', ['pendiente', 'pagado', 'cancelado'])->default('pendiente');
             $table->timestamp('cancelled_at')->nullable();
             $table->foreignId('cancelled_by')->nullable()->constrained('users');
             $table->text('cancellation_reason')->nullable();

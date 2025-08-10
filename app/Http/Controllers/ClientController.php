@@ -11,7 +11,8 @@ use App\Http\Requests\RestoreClientRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 class ClientController extends Controller
 {
     public function index(Request $request)
@@ -149,22 +150,52 @@ class ClientController extends Controller
 
     public function forceDelete(DeleteClientRequest $request, $id)
     {
+        // Buscar cliente (incluye los soft-deleted)
         $client = Client::withTrashed()->findOrFail($id);
+
+        // Guardar valores antes de eliminar
         $oldValues = $client->toArray();
+        $clientId = $client->id;
+        $razon = $request->validated()['razon'] ?? null;
 
-        // Registrar en audit log antes de eliminar
-        AuditLog::create([
-            'user_id' => Auth::id(),
-            'action' => 'force_delete',
-            'table_name' => 'clients',
-            'record_id' => $client->id,
-            'old_values' => json_encode($oldValues),
-            'new_values' => json_encode(['razon' => $request->validated()['razon'], 'force_deleted_by' => Auth::user()->name]),
-        ]);
+        // VALIDACIÓN: ¿tiene facturas asociadas?
+        // Uso withTrashed() en invoices() para contar incluso facturas ya "soft-deleted".
+        if ($client->invoices()->withTrashed()->exists()) {
+            return redirect()->route('clients.index')
+                ->with('error', 'No se puede eliminar permanentemente: el cliente tiene facturas asociadas.');
+        }
 
-        $client->forceDelete();
+        DB::beginTransaction();
+        try {
+            // Eliminar físicamente
+            $client->forceDelete();
 
-        return redirect()->route('clients.index')->with('success', 'Cliente eliminado permanentemente.');
+            // Registrar en audit log **después** de la eliminación exitosa
+            AuditLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'force_delete',
+                'table_name' => 'clients',
+                'record_id' => $clientId,
+                'old_values' => json_encode($oldValues),
+                'new_values' => json_encode([
+                    'razon' => $razon,
+                    'force_deleted_by' => auth()->user()->name,
+                ]),
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('clients.index')
+                ->with('success', 'Cliente eliminado permanentemente.');
+        } catch (QueryException $e) {
+            DB::rollBack();
+            return redirect()->route('clients.index')
+                ->with('error', 'Error al eliminar permanentemente: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->route('clients.index')
+                ->with('error', 'Ocurrió un error inesperado: ' . $e->getMessage());
+        }
     }
 
     public function eliminados(Request $request)

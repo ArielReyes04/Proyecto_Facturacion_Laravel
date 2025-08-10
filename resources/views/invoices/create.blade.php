@@ -171,7 +171,7 @@
                 subtotal += unitPrice * quantity;
             });
             
-            const tax = subtotal * 0.18;
+            const tax = subtotal * 0.15;
             const total = subtotal + tax;
             
             document.getElementById('subtotal').textContent = 'S/ ' + subtotal.toFixed(2);

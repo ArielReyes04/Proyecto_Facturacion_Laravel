@@ -41,9 +41,23 @@
                     S/ {{ number_format($invoice->total, 2) }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $invoice->status == 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                        {{ $invoice->status == 'active' ? 'Activa' : 'Cancelada' }}
-                    </span>
+                    @if($invoice->status === 'pendiente')
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Pendiente
+                        </span>
+                    @elseif($invoice->status === 'pagado')
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Pagado
+                        </span>
+                    @elseif($invoice->status === 'cancelado')
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                            Cancelado
+                        </span>
+                    @else
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                            Desconocido
+                        </span>
+                    @endif
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {{ $invoice->created_at->format('d/m/Y H:i') }}

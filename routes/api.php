@@ -4,12 +4,25 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Http\Controllers\PagosControlador as PaymentController;
 
-Route::get('/clients', function (Request $request) {
-    /** @var App\Models\Client $client */
-    $client = $request->user(); // cliente autenticado con token
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+*/
 
-    return $client->invoices; // devuelve solo las facturas del cliente
-})->middleware('auth:sanctum');
+Route::middleware('auth:sanctum')->group(function () {
 
+    // Obtener facturas del cliente autenticado
+    Route::get('/invoices', function (Request $request) {
+        $client = $request->user();
 
+        return response()->json([
+            'invoices' => $client->invoices
+        ]);
+    });
+
+    // Registrar un nuevo pago
+    Route::post('/payments', [PaymentController::class, 'store'])->name('api.payments.store');
+});

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Factura {{ $invoice->invoice_number }}</title>
     <style>
         body {
@@ -78,19 +78,27 @@
             font-weight: bold;
             font-size: 16px;
         }
+        /* Estados */
         .status {
             text-align: center;
             padding: 10px;
             margin-bottom: 20px;
             border-radius: 5px;
             font-weight: bold;
+            font-size: 1.1em;
+            color: #fff;
         }
-        .status.active {
+        .status.pendiente {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .status.pagado {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        .status.cancelled {
+        .status.cancelado {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
@@ -118,7 +126,15 @@
     </div>
 
     <div class="status {{ $invoice->status }}">
-        {{ $invoice->status == 'active' ? 'FACTURA ACTIVA' : 'FACTURA CANCELADA' }}
+        @if($invoice->status === 'pendiente')
+            FACTURA PENDIENTE
+        @elseif($invoice->status === 'pagado')
+            FACTURA PAGADA
+        @elseif($invoice->status === 'cancelado')
+            FACTURA CANCELADA
+        @else
+            ESTADO DESCONOCIDO
+        @endif
     </div>
 
     <div class="info-section">

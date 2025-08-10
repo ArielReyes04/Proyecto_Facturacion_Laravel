@@ -7,6 +7,7 @@ use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use App\Models\User;
+
 class RolePermissionSeeder extends Seeder
 {
     /**
@@ -19,6 +20,7 @@ class RolePermissionSeeder extends Seeder
         $secretaryRole = Role::firstOrCreate(['name' => 'Secretario']);
         $warehouseRole = Role::firstOrCreate(['name' => 'Bodega']);
         $salesRole = Role::firstOrCreate(['name' => 'Ventas']);
+        $paymentsRole = Role::firstOrCreate(['name' => 'Pagos']);
 
         // Create permissions
         Permission::firstOrCreate(['name' => 'access.system']);
@@ -26,26 +28,26 @@ class RolePermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'manage.clients']);
         Permission::firstOrCreate(['name' => 'manage.products']);
         Permission::firstOrCreate(['name' => 'manage.invoices']);
+        Permission::firstOrCreate(['name' => 'manage.payments']);
         Permission::firstOrCreate(['name' => 'view.dashboard']);
 
         // Assign permissions to roles
-        $adminRole->givePermissionTo(['access.system', 'manage.users', 'manage.clients', 'manage.products', 'manage.invoices', 'view.dashboard']);
+        $adminRole->givePermissionTo(['access.system', 'manage.users', 'manage.clients', 'manage.products', 'manage.invoices', 'manage.payments', 'view.dashboard']);
         $secretaryRole->givePermissionTo(['access.system', 'manage.clients', 'view.dashboard']);
         $warehouseRole->givePermissionTo(['access.system', 'manage.products', 'view.dashboard']);
         $salesRole->givePermissionTo(['access.system', 'manage.invoices', 'view.dashboard']);
+        $paymentsRole->givePermissionTo(['access.system', 'manage.payments', 'view.dashboard']);
 
         // Create or update admin user
         $admin = User::updateOrCreate(
             ['email' => 'admin@facturacion.com'],
             [
                 'name' => 'Administrador del Sistema',
-                'password' => bcrypt('admin123'), // Use a secure password
+                'password' => bcrypt('admin123'),
                 'is_active' => true,
                 'email_verified_at' => now(),
             ]
         );
-
-        // Assign admin role
         $admin->assignRole('Administrador');
 
         // Create test users for each role
@@ -81,5 +83,17 @@ class RolePermissionSeeder extends Seeder
             ]
         );
         $sales->assignRole('Ventas');
+
+        // Create test user for Pagos role
+        $payments = User::updateOrCreate(
+            ['email' => 'pagos@facturacion.com'],
+            [
+                'name' => 'Usuario Pagos',
+                'password' => bcrypt('pagos123'),
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        $payments->assignRole('Pagos');
     }
 }

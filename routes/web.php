@@ -13,6 +13,7 @@ use App\Http\Middleware\VerifyAdmin;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
+use App\Http\Controllers\PagosControlador;
 
 Route::get('/', function () {
     return view('welcome');
@@ -97,6 +98,12 @@ Route::middleware(['auth', 'verified', VerifyActiveUser::class])->group(function
         Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'confirmCancel'])->name('invoices.confirm-cancel');
         Route::get('/invoices/{invoice}/confirm-delete', [InvoiceController::class, 'destroy'])->name('invoices.confirm-delete');
         Route::post('/invoices/{invoice}/destroy', [InvoiceController::class, 'confirmDestroy'])->name('invoices.confirm-destroy');
+    });
+
+    Route::middleware(['role:Administrador|Pagos'])->group(function () {
+        Route::get('/payments/pending', [PagosControlador::class, 'index'])->name('payments.index');
+        Route::post('/payments/{payment}/approve', [PagosControlador::class, 'approve'])->name('payments.approve');
+        Route::post('/payments/{payment}/reject', [PagosControlador::class, 'reject'])->name('payments.reject');
     });
 
 

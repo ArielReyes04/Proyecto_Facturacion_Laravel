@@ -112,10 +112,11 @@ class InvoiceController extends Controller
                 'subtotal' => 0,
                 'tax' => 0,
                 'total' => 0,
+                'status' => 'pendiente',
             ]);
 
             $subtotal = 0;
-
+            
             // Crear items de factura y actualizar stock
             foreach ($validated['products'] as $productData) {
                 $product = Product::findOrFail($productData['id']);
@@ -130,7 +131,7 @@ class InvoiceController extends Controller
                     'quantity' => $quantity,
                     'total' => $total,
                 ]);
-
+                // Agrega esto para ver qué status se está guardando realmente:
                 // Reducir stock
                 $product->reduceStock($quantity);
                 $subtotal += $total;
@@ -159,6 +160,7 @@ class InvoiceController extends Controller
                     'total' => $invoice->total,
                 ]),
             ]);
+            
 
             DB::commit();
 
@@ -203,7 +205,7 @@ class InvoiceController extends Controller
 
             // Cancelar factura
             $invoice->update([
-                'status' => 'cancelled',
+                'status' => 'cancelado',
                 'cancelled_at' => now(),
                 'cancelled_by' => Auth::id(),
                 'cancellation_reason' => $validated['cancellation_reason'],

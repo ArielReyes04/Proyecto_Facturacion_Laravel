@@ -54,6 +54,14 @@
                             <i class="fas fa-file-invoice mr-1"></i> Facturas
                         </a>
                     @endrole
+
+                    @role('Administrador|Pagos')
+                        <a href="{{ route('payments.index') }}"
+                        class="text-sm font-medium {{ request()->routeIs('payments.*') ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-600 hover:text-indigo-600' }}">
+                            <i class="fas fa-credit-card mr-1"></i> Pagos
+                        </a>
+                    @endrole
+
                 </div>
             </div>
             <div class="flex items-center space-x-4">
