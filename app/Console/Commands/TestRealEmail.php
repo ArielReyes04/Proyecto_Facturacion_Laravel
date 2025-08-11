@@ -17,9 +17,9 @@ class TestRealEmail extends Command
     {
         $email = $this->argument('email');
         $invoiceId = $this->option('invoice-id');
-        
+
         $this->info("Testing real email sending to: {$email}");
-        
+
         try {
             // Verificar configuración de email
             $this->info("Checking email configuration...");
@@ -28,7 +28,7 @@ class TestRealEmail extends Command
             $this->info("Mail Port: " . config('mail.mailers.smtp.port'));
             $this->info("Mail Username: " . config('mail.mailers.smtp.username'));
             $this->info("Mail From: " . config('mail.from.address'));
-            
+
             // Obtener o crear una factura de prueba
             if ($invoiceId) {
                 $invoice = Invoice::with(['client', 'user', 'items.product'])->find($invoiceId);
@@ -43,24 +43,27 @@ class TestRealEmail extends Command
                     return 1;
                 }
             }
-            
+
+            /** @var \App\Models\Client $client */
+            $client = $invoice->client;
+
+
             $this->info("Using invoice: {$invoice->invoice_number}");
-            $this->info("Original client email: {$invoice->client->email}");
-            
+            $this->info("Original client email: {$client->email}");
+
             // Enviar email
             $this->info("Sending email...");
-            
+
             Mail::to($email)->send(new InvoiceMail($invoice));
-            
+
             $this->info("✅ Email sent successfully!");
             $this->info("Check your inbox at: {$email}");
-            
         } catch (\Exception $e) {
             $this->error("❌ Error sending email: " . $e->getMessage());
             $this->error("Stack trace: " . $e->getTraceAsString());
             return 1;
         }
-        
+
         return 0;
     }
 }

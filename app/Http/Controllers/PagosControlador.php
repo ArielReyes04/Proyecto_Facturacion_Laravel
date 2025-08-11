@@ -4,116 +4,195 @@ namespace App\Http\Controllers;
 
 use App\Models\Pago;
 use App\Models\Invoice;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-
-
+use App\Http\Requests\StorePaymentRequest;
+use App\Http\Requests\UpdatePaymentRequest;
+use App\Http\Requests\DeletePaymentRequest;
+use App\Http\Requests\ForceDeletePaymentRequest;
+use App\Http\Requests\RestorePaymentRequest;
+use App\Mail\InvoiceMail;
+use Illuminate\Support\Facades\Mail;
 class PagosControlador extends Controller
 {
-    /**
-     * Display a listing of pending payments.
-     *
-     * @return \Illuminate\View\View
-     */
+    // Listar pagos
     public function index(Request $request)
     {
-        $query = Pago::with(['invoice', 'payer']);
-
-        // Filtro búsqueda por invoice_id, payer name o transaction_number
-        if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('invoice_id', 'like', "%{$search}%")
-                ->orWhereHas('payer', function ($q2) use ($search) {
-                    $q2->where('name', 'like', "%{$search}%");
-                })
-                ->orWhere('transaction_number', 'like', "%{$search}%");
-            });
-        }
-
-        // Paginación con límite mínimo 1 y máximo 100
         $perPage = (int) $request->input('per_page', 10);
         $perPage = max(1, min(100, $perPage));
 
-        // Ordenar por actualización más reciente primero
-        $payments = $query->orderBy('updated_at', 'desc')->paginate($perPage)->withQueryString();
+        $pendingQuery = Pago::with(['invoice', 'payer'])
+            ->where('status', 'pendiente');
+        $processedQuery = Pago::with(['invoice', 'payer'])
+            ->whereIn('status', ['aprobado', 'rechazado']);
 
-        // Separar pagos pendientes y pagos procesados para la vista
-        $pendingPayments = $payments->filter(fn($p) => $p->status === 'pendiente');
-        $processedPayments = $payments->filter(fn($p) => in_array($p->status, ['aprobado', 'rechazado']));
-
-        // Si es petición AJAX (opcional para actualizaciones sin recargar)
-        if ($request->ajax() || $request->get('ajax')) {
-            $pendingHtml = view('payments.partials.pending-table', ['payments' => $pendingPayments])->render();
-            $processedHtml = view('payments.partials.processed-table', ['payments' => $processedPayments])->render();
-            $paginationHtml = view('payments.partials.pagination', ['payments' => $payments])->render();
-
-            return response()->json([
-                'pending_table' => $pendingHtml,
-                'processed_table' => $processedHtml,
-                'pagination' => $paginationHtml,
-                'total' => $payments->total(),
-                'current_page' => $payments->currentPage(),
-                'last_page' => $payments->lastPage(),
-            ]);
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $pendingQuery->where(function ($q) use ($search) {
+                $q->where('invoice_id', 'like', "%{$search}%")
+                  ->orWhereHas('payer', function ($q2) use ($search) {
+                      $q2->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhere('transaction_number', 'like', "%{$search}%");
+            });
+            $processedQuery->where(function ($q) use ($search) {
+                $q->where('invoice_id', 'like', "%{$search}%")
+                  ->orWhereHas('payer', function ($q2) use ($search) {
+                      $q2->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhere('transaction_number', 'like', "%{$search}%");
+            });
         }
 
-        return view('payments.index', compact('payments', 'pendingPayments', 'processedPayments'));
+        $pendingPayments = $pendingQuery->orderBy('updated_at', 'desc')->paginate($perPage, ['*'], 'pending_page');
+        $processedPayments = $processedQuery->orderBy('updated_at', 'desc')->paginate($perPage, ['*'], 'processed_page');
+
+        return view('payments.index', compact('pendingPayments', 'processedPayments'));
     }
 
-
-
-    /**
-     * Store a newly created payment in storage (API).
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function store(Request $request)
+    // Mostrar formulario de creación
+    public function create()
     {
-        $request->validate([
-            'invoice_id' => 'required|exists:invoices,id',
-            'payment_type' => 'required|string|max:50',
-            'amount' => 'required|numeric|min:0.01',
-            'transaction_number' => 'nullable|string|max:100',
-            'observations' => 'nullable|string|max:255',
-        ]);
+        $invoices = Invoice::where('status', 'pendiente')->get();
+        return view('payments.create', compact('invoices'));
+    }
 
-        $client = $request->user();
+    // Guardar pago
+    public function store(StorePaymentRequest $request)
+    {
+        $validated = $request->validated();
+        // Buscar la factura
+        $invoice = Invoice::findOrFail($validated['invoice_id']);
 
-        $invoice = Invoice::where('id', $request->invoice_id)
-                          ->where('client_id', $client->id)
-                          ->first();
-
-        if (!$invoice) {
-            return response()->json([
-                'message' => 'La factura no existe o no pertenece al cliente autenticado.'
-            ], 403);
-        }
-
+        // Obtener el id del cliente de la factura
+        $clientId = $invoice->client_id;
         $pago = Pago::create([
-            'invoice_id' => $invoice->id,
-            'payment_type' => $request->payment_type,
-            'amount' => $request->amount,
-            'transaction_number' => $request->transaction_number,
-            'observations' => $request->observations,
+            'invoice_id' => $validated['invoice_id'],
+            'payment_type' => $validated['payment_type'],
+            'amount' => $validated['amount'],
+            'transaction_number' => $validated['transaction_number'] ?? null,
+            'observations' => $validated['observations'] ?? null,
             'status' => 'pendiente',
-            'paid_by' => $client->id,
+            'paid_by' => $clientId,
             'validated_by' => null,
             'validated_at' => null,
         ]);
 
-        return response()->json([
-            'message' => 'Pago registrado exitosamente.',
-            'payment' => $pago
-        ], 201);
+        // Audit log
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'create',
+            'table_name' => 'pagos',
+            'record_id' => $pago->id,
+            'old_values' => null,
+            'new_values' => json_encode($validated),
+        ]);
+
+        return redirect()->route('payments.index')->with('success', 'Pago registrado exitosamente.');
     }
 
-    /**
-     * Aprobar un pago.
-     */
+    // Mostrar pago
+    public function show(Pago $payment)
+    {
+        return view('payments.show', compact('payment'));
+    }
+
+    // Mostrar formulario de edición
+    public function edit(Pago $payment)
+    {
+        $invoices = Invoice::all();
+        return view('payments.edit', compact('payment', 'invoices'));
+    }
+
+    // Actualizar pago
+    public function update(UpdatePaymentRequest $request, Pago $payment)
+    {
+        $validated = $request->validated();
+        $oldValues = $payment->toArray();
+
+        $payment->update($validated);
+
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'update',
+            'table_name' => 'pagos',
+            'record_id' => $payment->id,
+            'old_values' => json_encode($oldValues),
+            'new_values' => json_encode($validated),
+        ]);
+
+        return redirect()->route('payments.index')->with('success', 'Pago actualizado exitosamente.');
+    }
+
+    // Eliminar (soft delete)
+    public function destroy(DeletePaymentRequest $request, Pago $payment)
+    {
+        $oldValues = $payment->toArray();
+
+        $payment->delete();
+
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'delete',
+            'table_name' => 'pagos',
+            'record_id' => $payment->id,
+            'old_values' => json_encode($oldValues),
+            'new_values' => json_encode([
+                'reason' => $request->input('reason')
+            ]),
+        ]);
+
+        return redirect()->route('payments.index')->with('success', 'Pago eliminado exitosamente.');
+    }
+
+    // Restaurar pago eliminado
+    public function restore(RestorePaymentRequest $request, $id)
+    {
+        $payment = Pago::withTrashed()->findOrFail($id);
+        $payment->restore();
+
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'restore',
+            'table_name' => 'pagos',
+            'record_id' => $payment->id,
+            'old_values' => json_encode(['deleted_at' => $payment->deleted_at]),
+            'new_values' => json_encode([
+                'restored_by' => Auth::user()->name,
+                'reason' => $request->input('reason')
+            ]),
+        ]);
+
+        return redirect()->route('payments.index')->with('success', 'Pago restaurado correctamente.');
+    }
+
+    // Eliminar permanentemente
+    public function forceDelete(ForceDeletePaymentRequest $request, $id)
+    {
+        $payment = Pago::withTrashed()->findOrFail($id);
+        $oldValues = $payment->toArray();
+
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'force_delete',
+            'table_name' => 'pagos',
+            'record_id' => $payment->id,
+            'old_values' => json_encode($oldValues),
+            'new_values' => json_encode([
+                'force_deleted_by' => Auth::user()->name,
+                'reason' => $request->input('reason')
+            ]),
+        ]);
+
+        $payment->forceDelete();
+
+        return redirect()->route('payments.index')->with('success', 'Pago eliminado permanentemente.');
+    }
+
+    // Aprobar pago
     public function approve(Request $request, $id)
     {
         $payment = Pago::findOrFail($id);
@@ -126,11 +205,23 @@ class PagosControlador extends Controller
         try {
             $payment->update([
                 'status' => 'aprobado',
+                'observations' => trim(($payment->observations ?? '') . "\nObservaciones de aprobación: " . ($request->input('observations') ?? '')),
                 'validated_by' => Auth::id(),
                 'validated_at' => now(),
             ]);
 
             $payment->invoice->update(['status' => 'pagado']);
+            $payment->invoice->load(['client', 'user', 'items.product']);
+
+            Mail::to($payment->invoice->client->email)->send(new InvoiceMail($payment->invoice));
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'approve',
+                'table_name' => 'pagos',
+                'record_id' => $payment->id,
+                'old_values' => null,
+                'new_values' => json_encode(['status' => 'aprobado']),
+            ]);
 
             DB::commit();
 
@@ -143,14 +234,10 @@ class PagosControlador extends Controller
         }
     }
 
+    // Rechazar pago
     public function reject(Request $request, $id)
     {
         $payment = Pago::findOrFail($id);
-
-        // Aquí quitas la validación si quieres probar errores (pero no recomendado)
-        // $request->validate([
-        //     'rejection_reason' => 'required|string|max:255',
-        // ]);
 
         if ($payment->status !== 'pendiente') {
             return redirect()->route('payments.index')->with('error', 'El pago no está en estado pendiente.');
@@ -158,16 +245,39 @@ class PagosControlador extends Controller
 
         DB::beginTransaction();
         try {
+            $now = now();
+            $userId = Auth::id();
+            $reason = $request->input('rejection_reason') ?? 'No especificado';
+
+            // Actualizar pago
             $payment->update([
                 'status' => 'rechazado',
-                'validated_by' => Auth::id(),
-                'validated_at' => now(),
-                // Agrega motivo de rechazo a observaciones si te llega en $request
-                'observations' => trim(($payment->observations ?? '') . "\nMotivo de rechazo: " . ($request->input('rejection_reason') ?? '')),
+                'validated_by' => $userId,
+                'validated_at' => $now,
+                'cancelled_at' => $now,
+                'cancelled_by' => $userId,
+                'cancellation_reason' => $reason,
+                'observations' => trim(($payment->observations ?? '') . "\nMotivo de rechazo: " . $reason),
             ]);
+            
+            // Actualizar factura relacionada
+            $payment->invoice->update([
+                'status' => 'cancelado',
+                'cancelled_at' => $now,
+                'cancelled_by' => $userId,
+                'cancellation_reason' => $reason,
+            ]);
+            $payment->invoice->load(['client', 'user', 'items.product']);
 
-            // La factura queda en estado pendiente
-            $payment->invoice->update(['status' => 'cancelado']);
+            Mail::to($payment->invoice->client->email)->send(new InvoiceMail($payment->invoice));
+            AuditLog::create([
+                'user_id' => $userId,
+                'action' => 'reject',
+                'table_name' => 'pagos',
+                'record_id' => $payment->id,
+                'old_values' => null,
+                'new_values' => json_encode(['status' => 'rechazado']),
+            ]);
 
             DB::commit();
 
@@ -178,5 +288,92 @@ class PagosControlador extends Controller
 
             return redirect()->route('payments.index')->with('error', 'Error al rechazar el pago.');
         }
+    }
+
+
+    // Mostrar pagos eliminados
+    public function eliminados()
+    {
+        $deletedPayments = Pago::onlyTrashed()->with(['invoice', 'payer'])->get();
+        return view('payments.eliminados', compact('deletedPayments'));
+    }
+
+    // Obtener todos los pagos
+    public function getPayments()
+    {
+        return response()->json(Pago::all());
+    }
+
+    // Obtener un pago por ID
+    public function getPaymentById($id)
+    {
+        $payment = Pago::find($id);
+        if (!$payment) {
+            return response()->json(['error' => 'Pago no encontrado'], 404);
+        }
+        return response()->json($payment);
+    }
+
+    // Crear pago (API)
+    public function createPayment(StorePaymentRequest $request)
+    {
+        $validated = $request->validated();
+        $pago = Pago::create([
+            'invoice_id' => $validated['invoice_id'],
+            'payment_type' => $validated['payment_type'],
+            'amount' => $validated['amount'],
+            'transaction_number' => $validated['transaction_number'] ?? null,
+            'observations' => $validated['observations'] ?? null,
+            'status' => 'pendiente',
+            'paid_by' => Auth::id() ?? 1, // O ajusta según tu lógica de autenticación API
+            'validated_by' => null,
+            'validated_at' => null,
+        ]);
+        return response()->json(['message' => 'Pago creado exitosamente.', 'payment' => $pago], 201);
+    }
+
+    // Actualizar pago (API)
+    public function updatePayment(UpdatePaymentRequest $request, $id)
+    {
+        $payment = Pago::find($id);
+        if (!$payment) {
+            return response()->json(['error' => 'Pago no encontrado'], 404);
+        }
+        $validated = $request->validated();
+        $payment->update($validated);
+        return response()->json(['message' => 'Pago actualizado exitosamente.', 'payment' => $payment]);
+    }
+
+    // Eliminar (soft delete) pago (API)
+    public function deletePayment(DeletePaymentRequest $request, $id)
+    {
+        $payment = Pago::find($id);
+        if (!$payment) {
+            return response()->json(['error' => 'Pago no encontrado'], 404);
+        }
+        $payment->delete();
+        return response()->json(['message' => 'Pago eliminado exitosamente.']);
+    }
+
+    // Restaurar pago eliminado (API)
+    public function restorePayment(RestorePaymentRequest $request, $id)
+    {
+        $payment = Pago::withTrashed()->find($id);
+        if (!$payment) {
+            return response()->json(['error' => 'Pago no encontrado'], 404);
+        }
+        $payment->restore();
+        return response()->json(['message' => 'Pago restaurado exitosamente.', 'payment' => $payment]);
+    }
+
+    // Eliminar permanentemente pago (API)
+    public function forceDeletePayment(ForceDeletePaymentRequest $request, $id)
+    {
+        $payment = Pago::withTrashed()->find($id);
+        if (!$payment) {
+            return response()->json(['error' => 'Pago no encontrado'], 404);
+        }
+        $payment->forceDelete();
+        return response()->json(['message' => 'Pago eliminado permanentemente.']);
     }
 }

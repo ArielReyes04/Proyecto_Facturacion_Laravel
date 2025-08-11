@@ -40,6 +40,8 @@ Route::middleware(['auth', 'verified', VerifyActiveUser::class])->group(function
             Route::get('/users/eliminados', [UserController::class, 'eliminados'])->name('admin.users.eliminados');
             Route::post('/users/{id}/restore', [UserController::class, 'restore'])->name('admin.users.restore');
             Route::delete('/users/{id}/force-delete', [UserController::class, 'forceDelete'])->name('admin.users.forceDelete');
+            Route::get('/users/{id}/tokens', [UserController::class, 'tokens'])->name('admin.users.tokens');
+            Route::post('/users/{user}/token', [UserController::class, 'crearTokenAcceso'])->name('admin.users.crearTokenAcceso');
             Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('admin.audit-logs');
             Route::get('/audit-logs/{id}/details', [AuditLogController::class, 'details'])->name('admin.audit-logs.details');
         });
@@ -94,16 +96,24 @@ Route::middleware(['auth', 'verified', VerifyActiveUser::class])->group(function
     Route::middleware(['role:Administrador|Ventas'])->group(function () {
         Route::get('/invoices/{invoice}/edit', [InvoiceController::class, 'edit'])->name('invoices.edit');
         Route::put('/invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
-        Route::get('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
-        Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'confirmCancel'])->name('invoices.confirm-cancel');
         Route::get('/invoices/{invoice}/confirm-delete', [InvoiceController::class, 'destroy'])->name('invoices.confirm-delete');
         Route::post('/invoices/{invoice}/destroy', [InvoiceController::class, 'confirmDestroy'])->name('invoices.confirm-destroy');
     });
 
     Route::middleware(['role:Administrador|Pagos'])->group(function () {
-        Route::get('/payments/pending', [PagosControlador::class, 'index'])->name('payments.index');
+        Route::get('/payments', [PagosControlador::class, 'index'])->name('payments.index');
+        Route::get('/payments/create', [PagosControlador::class, 'create'])->name('payments.create');
+        Route::get('/payments/eliminados', [PagosControlador::class, 'eliminados'])->name('payments.eliminados');
+        Route::post('/payments', [PagosControlador::class, 'store'])->name('payments.store');
+        Route::get('/payments/{payment}', [PagosControlador::class, 'show'])->name('payments.show');
+        Route::get('/payments/{payment}/edit', [PagosControlador::class, 'edit'])->name('payments.edit');
+        Route::put('/payments/{payment}', [PagosControlador::class, 'update'])->name('payments.update');
+        Route::delete('/payments/{payment}', [PagosControlador::class, 'destroy'])->name('payments.destroy');
         Route::post('/payments/{payment}/approve', [PagosControlador::class, 'approve'])->name('payments.approve');
         Route::post('/payments/{payment}/reject', [PagosControlador::class, 'reject'])->name('payments.reject');
+        // Rutas para restaurar y eliminar permanentemente pagos
+        Route::post('/payments/{id}/restore', [PagosControlador::class, 'restore'])->name('payments.restore');
+        Route::delete('/payments/{id}/force-delete', [PagosControlador::class, 'forceDelete'])->name('payments.forceDelete');
     });
 
 

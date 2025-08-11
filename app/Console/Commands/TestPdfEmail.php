@@ -27,29 +27,33 @@ class TestPdfEmail extends Command
     /**
      * Execute the console command.
      */
-    public function handle(): void
+    public function handle()
     {
         $invoiceId = $this->argument('invoice_id');
 
         if ($invoiceId) {
+            /** @var Invoice|null $invoice */
             $invoice = Invoice::with(['client', 'user', 'items.product'])->find($invoiceId);
             if (!$invoice) {
                 $this->error("Invoice with ID {$invoiceId} not found.");
                 return;
             }
         } else {
+            /** @var Invoice|null $invoice */
             $invoice = Invoice::with(['client', 'user', 'items.product'])->first();
             if (!$invoice) {
                 $this->error("No invoices found in the database.");
                 return;
             }
         }
+        
+        /** @var \App\Models\Client $client */
+        $client = $invoice->client;
 
-        /** @var \App\Models\Invoice $invoice */
 
         $this->info("Testing with Invoice: {$invoice->invoice_number}");
-        $this->info("Client: {$invoice->client->name}");
-        $this->info("Email: {$invoice->client->email}");
+        $this->info("Client: {$client->name}");
+        $this->info("Email: {$client->email}");
 
         // Test PDF generation
         $this->info("Testing PDF generation...");
@@ -64,7 +68,7 @@ class TestPdfEmail extends Command
         // Test email sending
         $this->info("Testing email sending...");
         try {
-            Mail::to($invoice->client->email)->send(new InvoiceMail($invoice));
+            Mail::to($client->email)->send(new InvoiceMail($invoice));
             $this->info("✅ Email sent successfully!");
             $this->info("Check your logs at storage/logs/laravel.log for email details.");
         } catch (\Exception $e) {

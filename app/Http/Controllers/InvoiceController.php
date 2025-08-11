@@ -12,6 +12,7 @@ use App\Http\Requests\CancelInvoiceRequest;
 use App\Http\Requests\DeleteInvoiceRequest;
 use App\Http\Requests\RestoreInvoiceRequest;
 use App\Http\Requests\ForceDeleteInvoiceRequest;
+use App\Http\Requests\UpdateInvoiceRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Mail\InvoiceMail;
+
 
 class InvoiceController extends Controller
 {
@@ -498,5 +500,310 @@ public function restore(RestoreInvoiceRequest $request, $id)
         $invoice->forceDelete();
 
         return back()->with('success', 'Factura eliminada permanentemente de la base de datos.');
+    }
+
+    // Obtener todas las facturas
+    public function getInvoices()
+    {
+        $invoices = Invoice::with(['client', 'user', 'items.product'])->get();
+        return response()->json($invoices);
+    }
+
+    // Obtener una factura por ID
+    public function getInvoiceById($id)
+    {
+        $invoice = Invoice::with(['client', 'user', 'items.product'])->find($id);
+        if (!$invoice) {
+            return response()->json(['error' => 'Factura no encontrada'], 404);
+        }
+        return response()->json($invoice);
+    }
+
+    // Crear factura
+    // Crear factura vía API (igual que store, pero respuesta JSON)
+    public function createInvoice(StoreInvoiceRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            // Verificar stock disponible
+            foreach ($validated['products'] as $productData) {
+                $product = Product::findOrFail($productData['id']);
+                if (!$product->hasStock($productData['quantity'])) {
+                    return response()->json([
+                        'error' => "Stock insuficiente para el producto: {$product->name}. Stock disponible: {$product->stock}"
+                    ], 422);
+                }
+            }
+
+            // Crear factura
+            $invoice = Invoice::create([
+                'invoice_number' => Invoice::generateInvoiceNumber(),
+                'client_id' => $validated['client_id'],
+                'user_id' => Auth::id(),
+                'subtotal' => 0,
+                'tax' => 0,
+                'total' => 0,
+                'status' => 'pendiente',
+            ]);
+
+            $subtotal = 0;
+
+            // Crear items de factura y actualizar stock
+            foreach ($validated['products'] as $productData) {
+                $product = Product::findOrFail($productData['id']);
+                $quantity = $productData['quantity'];
+                $total = $product->price * $quantity;
+
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'unit_price' => $product->price,
+                    'quantity' => $quantity,
+                    'total' => $total,
+                ]);
+                $product->reduceStock($quantity);
+                $subtotal += $total;
+            }
+
+            // Calcular totales (15% IGV)
+            $tax = $subtotal * 0.15;
+            $total = $subtotal + $tax;
+
+            $invoice->update([
+                'subtotal' => $subtotal,
+                'tax' => $tax,
+                'total' => $total,
+            ]);
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'create_api',
+                'table_name' => 'invoices',
+                'record_id' => $invoice->id,
+                'old_values' => null,
+                'new_values' => json_encode([
+                    'invoice_number' => $invoice->invoice_number,
+                    'client_id' => $invoice->client_id,
+                    'total' => $invoice->total,
+                ]),
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Factura creada exitosamente.',
+                'invoice' => $invoice->load(['client', 'user', 'items.product'])
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollback();
+            return response()->json([
+                'error' => 'Error de validación.',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Actualizar factura vía API
+    public function updateInvoice(UpdateInvoiceRequest $request, $id)
+    {
+        try {
+            $invoice = Invoice::find($id);
+
+            if (!$invoice) {
+                return response()->json(['error' => 'Factura no encontrada'], 404);
+            }
+
+            $validated = $request->validated();
+
+            // Actualizar campos permitidos
+            $invoice->update([
+                'client_id' => $validated['client_id'] ?? $invoice->client_id,
+                'status' => $validated['status'] ?? $invoice->status,
+                // Agrega otros campos según sea necesario
+            ]);
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'update_api',
+                'table_name' => 'invoices',
+                'record_id' => $invoice->id,
+                'old_values' => null,
+                'new_values' => json_encode($invoice->toArray()),
+            ]);
+
+            return response()->json([
+                'message' => 'Factura actualizada exitosamente.',
+                'invoice' => $invoice->load(['client', 'user', 'items.product'])
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Error de validación.',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Eliminar (soft delete) factura vía API
+    public function deleteInvoice(DeleteInvoiceRequest $request, $id)
+    {
+        try {
+            $invoice = Invoice::find($id);
+
+            if (!$invoice) {
+                return response()->json(['error' => 'Factura no encontrada'], 404);
+            }
+
+            $validated = $request->validated();
+
+            // Restaurar stock si la factura está activa
+            if ($invoice->status === 'active') {
+                foreach ($invoice->items as $item) {
+                    $product = Product::find($item->product_id);
+                    if ($product) {
+                        $product->increment('stock', $item->quantity);
+                    }
+                }
+            }
+
+            $invoice->deletion_reason = $validated['reason'] ?? null;
+            $invoice->deleted_by = Auth::id();
+            $invoice->save();
+
+            $invoice->delete();
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'delete_api',
+                'table_name' => 'invoices',
+                'record_id' => $invoice->id,
+                'old_values' => null,
+                'new_values' => null,
+                'details' => [
+                    'deletion_reason' => $validated['reason'] ?? null
+                ],
+            ]);
+
+            return response()->json([
+                'message' => 'Factura eliminada exitosamente.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Restaurar factura eliminada vía API
+    public function restoreInvoice(RestoreInvoiceRequest $request, $id)
+    {
+        try {
+            $invoice = Invoice::onlyTrashed()->with('items')->find($id);
+
+            if (!$invoice) {
+                return response()->json(['error' => 'Factura no encontrada'], 404);
+            }
+
+            $validated = $request->validated();
+
+            // Verificar stock suficiente para restaurar
+            foreach ($invoice->items as $item) {
+                $product = Product::find($item->product_id);
+                if ($product && $product->stock < $item->quantity) {
+                    return response()->json([
+                        'error' => "No hay suficiente stock de {$product->name} para restaurar esta factura."
+                    ], 422);
+                }
+            }
+
+            // Reducir stock nuevamente
+            foreach ($invoice->items as $item) {
+                $product = Product::find($item->product_id);
+                if ($product) {
+                    $product->decrement('stock', $item->quantity);
+                }
+            }
+
+            $invoice->restore();
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'restore_api',
+                'table_name' => 'invoices',
+                'record_id' => $invoice->id,
+                'old_values' => ['status' => 'deleted'],
+                'new_values' => $invoice->toArray(),
+                'details' => [
+                    'restoration_reason' => $validated['reason'] ?? null,
+                    'stock_action' => 'reduced'
+                ],
+            ]);
+
+            return response()->json([
+                'message' => 'Factura restaurada exitosamente.',
+                'invoice' => $invoice->load(['client', 'user', 'items.product'])
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Eliminar permanentemente factura vía API
+    public function forceDeleteInvoice(DeleteInvoiceRequest $request, $id)
+    {
+        try {
+            $invoice = Invoice::onlyTrashed()->findOrFail($id);
+
+            $validated = $request->validated();
+
+            // Registrar en audit log antes de eliminar
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'force_delete_api',
+                'table_name' => 'invoices',
+                'record_id' => $invoice->id,
+                'old_values' => $invoice->toArray(),
+                'new_values' => null,
+                'details' => [
+                    'deletion_reason' => $validated['reason'] ?? null
+                ],
+            ]);
+
+            $invoice->forceDelete();
+
+            return response()->json(['message' => 'Factura eliminada permanentemente.']);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
     }
 }

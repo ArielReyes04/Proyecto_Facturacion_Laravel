@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Client;
 use App\Models\Product;
+use Spatie\Permission\Models\Role;
 
 class DemoDataSeeder extends Seeder
 {
@@ -13,36 +14,44 @@ class DemoDataSeeder extends Seeder
      */
     public function run(): void
     {
-        // Crear clientes de prueba
-        Client::create([
-            'name' => 'Juan Pérez García',
-            'email' => 'juan.perez@email.com',
-            'phone' => '987654321',
-            'address' => 'Av. Los Olivos 123, San Juan de Lurigancho',
-            'document_type' => 'DNI',
-            'document_number' => '12345678',
-            'is_active' => true,
-        ]);
+        // Crear el rol "Cliente" si no existe
+        $roleCliente = Role::firstOrCreate(['name' => 'Cliente','guard_name' => 'web']);
 
-        Client::create([
-            'name' => 'María López Fernández',
-            'email' => 'maria.lopez@email.com',
-            'phone' => '987654322',
-            'address' => 'Jr. Las Flores 456, Miraflores',
-            'document_type' => 'DNI',
-            'document_number' => '23456789',
-            'is_active' => true,
-        ]);
+        // Crear clientes de prueba y asignar rol
+        $clientes = [
+            [
+                'name' => 'Juan Pérez García',
+                'email' => 'juan.perez@email.com',
+                'phone' => '987654321',
+                'address' => 'Av. Los Olivos 123, San Juan de Lurigancho',
+                'document_type' => 'DNI',
+                'document_number' => '12345678',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'María López Fernández',
+                'email' => 'maria.lopez@email.com',
+                'phone' => '987654322',
+                'address' => 'Jr. Las Flores 456, Miraflores',
+                'document_type' => 'DNI',
+                'document_number' => '23456789',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Empresa ABC S.A.C.',
+                'email' => 'contacto@empresaabc.com',
+                'phone' => '01-234-5678',
+                'address' => 'Av. Javier Prado 789, San Isidro',
+                'document_type' => 'RUC',
+                'document_number' => '20123456789',
+                'is_active' => true,
+            ],
+        ];
 
-        Client::create([
-            'name' => 'Empresa ABC S.A.C.',
-            'email' => 'contacto@empresaabc.com',
-            'phone' => '01-234-5678',
-            'address' => 'Av. Javier Prado 789, San Isidro',
-            'document_type' => 'RUC',
-            'document_number' => '20123456789',
-            'is_active' => true,
-        ]);
+        foreach ($clientes as $clienteData) {
+            $cliente = Client::create($clienteData);
+            $cliente->assignRole($roleCliente);
+        }
 
         // Crear productos de prueba
         Product::create([

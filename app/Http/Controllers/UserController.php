@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
-
+use Laravel\Sanctum\PersonalAccessToken;
 class UserController extends Controller 
 {
     public function index(Request $request)
@@ -76,7 +76,8 @@ class UserController extends Controller
             abort(403, 'No tienes permiso para acceder a esta sección.');
         }
 
-        $roles = Role::all();
+        $roles = Role::where('name', '!=', 'Cliente')->get();
+
         return view('admin.users.create', compact('roles'));
     }
 
@@ -386,5 +387,50 @@ class UserController extends Controller
             'valid' => $valid,
             'errors' => $errors
         ]);
+    }
+
+    public function tokens(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        // Asumiendo que usas Laravel Sanctum para tokens
+        $query = $user->tokens();
+
+        // Filtro de búsqueda por nombre del token
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        // Número de registros por página (default 10)
+        $perPage = $request->input('per_page', 10);
+        $perPage = max(1, min(100, (int) $perPage)); // límite entre 1 y 100 para seguridad
+
+        $tokens = $query->orderBy('created_at', 'desc')
+                        ->paginate($perPage)
+                        ->withQueryString(); // conserva filtros en paginación
+
+        // Puedes crear una vista para mostrar los tokens del usuario
+        return view('admin.users.tokens', compact('user', 'tokens'));
+    }
+
+    public function crearTokenAcceso(Request $request, User $user)
+    {
+        if (!$user->id) {
+            return redirect()->back()->with('error', 'Usuario inválido');
+        }
+
+        $request->validate([
+            'nombre' => 'required|string|max:255'
+        ]);
+
+        $tokenName = $request->input('nombre');
+
+        $token = $user->createToken($tokenName);
+        $plainTextToken = $token->plainTextToken;
+
+        return redirect()
+            ->route('admin.users.tokens', ['id' => $user->id])
+            ->with('token_generado', $plainTextToken);
     }
 }

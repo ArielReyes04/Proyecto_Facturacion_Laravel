@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('transaction_number');
             $table->text('observations')->nullable();
             $table->enum('status', ['pendiente', 'aprobado', 'rechazado'])->default('pendiente');
-            $table->foreignId('paid_by')->constrained('users')->onDelete('cascade');
+            $table->foreignId('paid_by')->constrained('clients')->onDelete('cascade');
             $table->foreignId('validated_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('validated_at')->nullable();
             $table->timestamps();

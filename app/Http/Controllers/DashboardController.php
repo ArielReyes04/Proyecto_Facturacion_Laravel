@@ -13,115 +13,115 @@ use Illuminate\Support\Facades\Auth;
 class DashboardController extends Controller
 {
     public function index()
-{
-    $user = Auth::user();
-    
-    // Estadísticas generales
-    $stats = [
-        'total_invoices' => Invoice::count(),
-        'active_invoices' => Invoice::where('status', '!=', 'cancelled')->count(),
-        'cancelled_invoices' => Invoice::where('status', 'cancelled')->count(),
-        'total_clients' => Client::count(),
-        'active_clients' => Client::where('is_active', true)->count(),
-        'total_products' => Product::count(),
-        'low_stock_products' => Product::where('stock', '<', 10)->count(),
-        'total_revenue' => Invoice::where('status', '!=', 'cancelled')->sum('total'),
-    ];
-
-    // Últimas facturas
-    $recent_invoices = Invoice::with(['client', 'user'])
-        ->whereHas('client')
-        ->latest()
-        ->take(5)
-        ->get();
-
-    // Productos con poco stock
-    $low_stock_products = Product::where('stock', '<', 10)
-        ->where('is_active', true)
-        ->take(5)
-        ->get();
-
-    // Ventas mensuales (últimos 6 meses)
-    $monthly_sales = Invoice::select(
-            DB::raw('EXTRACT(MONTH FROM created_at) as month'),
-            DB::raw('EXTRACT(YEAR FROM created_at) as year'),
-            DB::raw('SUM(total) as total')
-        )
-        ->where('status', '!=', 'cancelled')
-        ->where('created_at', '>=', now()->subMonths(6))
-        ->groupBy('year', 'month')
-        ->orderBy('year', 'desc')
-        ->orderBy('month', 'desc')
-        ->get();
-
-    // Productos más vendidos
-    $top_products = DB::table('invoice_items')
-        ->join('invoices', 'invoice_items.invoice_id', '=', 'invoices.id')
-        ->join('products', 'invoice_items.product_id', '=', 'products.id')
-        ->where('invoices.status', '!=', 'cancelled')
-        ->select(
-            'products.name',
-            DB::raw('SUM(invoice_items.quantity) as total_sold'),
-            DB::raw('SUM(invoice_items.total) as total_revenue')
-        )
-        ->groupBy('products.id', 'products.name')
-        ->orderBy('total_sold', 'desc')
-        ->take(5)
-        ->get();
-
-    // Datos específicos para Secretario
-    $secretary_data = null;
-    if ($user->hasRole('Secretario')) {
-        $secretary_data = [
-            'new_clients_today' => Client::whereDate('created_at', today())->count(),
-            'new_clients_week' => Client::where('created_at', '>=', now()->subWeek())->count(),
-            'new_clients_month' => Client::where('created_at', '>=', now()->subMonth())->count(),
-            'pending_invoices' => Invoice::where('status', 'pending')->count(),
-            'overdue_invoices' => Invoice::where('status', 'overdue')->count(),
-            'recent_clients' => Client::latest()->take(8)->get(),
-            'client_growth' => $this->getClientGrowthData(),
-            'invoice_status_summary' => $this->getInvoiceStatusSummary(),
-            'top_clients' => $this->getTopClients(),
-            'client_communication_stats' => $this->getClientCommunicationStats(),
-            'upcoming_due_dates' => $this->getUpcomingDueDates(),
-            'client_activity' => $this->getClientActivity(),
-            'monthly_revenue_trend' => $this->getMonthlyRevenueTrend(),
-            'average_invoice_value' => $this->getAverageInvoiceValue(),
-            'clients_without_recent_activity' => $this->getClientsWithoutRecentActivity(),
+    {
+        $user = Auth::user();
+        
+        // Estadísticas generales
+        $stats = [
+            'total_invoices' => Invoice::count(),
+            'active_invoices' => Invoice::where('status', '!=', 'cancelled')->count(),
+            'cancelled_invoices' => Invoice::where('status', 'cancelled')->count(),
+            'total_clients' => Client::count(),
+            'active_clients' => Client::where('is_active', true)->count(),
+            'total_products' => Product::count(),
+            'low_stock_products' => Product::where('stock', '<', 10)->count(),
+            'total_revenue' => Invoice::where('status', '!=', 'cancelled')->sum('total'),
         ];
-    }
 
-    // Datos específicos para Bodega
-    $warehouse_data = null;
-    if ($user->hasRole('Bodega')) {
-        $warehouse_data = [
-            'critical_stock' => Product::where('stock', '<', 5)->where('is_active', true)->count(),
-            'out_of_stock' => Product::where('stock', 0)->where('is_active', true)->count(),
-            'total_stock_value' => Product::where('is_active', true)->sum(DB::raw('stock * price')),
-            'products_needing_restock' => Product::where('stock', '<', 10)->where('is_active', true)->take(10)->get(),
-            'low_stock_products' => Product::where('stock', '>', 0)->where('stock', '<', 10)->where('is_active', true)->get(),
-            'recent_stock_movements' => $this->getRecentStockMovements(),
-            'stock_by_category' => $this->getStockByCategory(),
-            'products_never_sold' => $this->getProductsNeverSold(),
-            'inventory_turnover' => $this->getInventoryTurnover(),
-            'stock_alerts' => $this->getSimpleStockAlerts(),
-            'inventory_summary' => $this->getSimpleInventorySummary(),
-            'cost_analysis' => $this->getCostAnalysis(),
-            'low_performing_products' => $this->getLowPerformingProducts(), // Agregado
-            'seasonal_trends' => $this->getSeasonalTrends(), // Agregado
-            'supplier_performance' => $this->getSupplierPerformance(), // Agregado
-        ];
-    }
+        // Últimas facturas
+        $recent_invoices = Invoice::with(['client', 'user'])
+            ->whereHas('client')
+            ->latest()
+            ->take(5)
+            ->get();
 
-    return view('dashboard', compact(
-        'stats',
-        'recent_invoices',
-        'low_stock_products',
-        'monthly_sales',
-        'top_products',
-        'secretary_data',
-        'warehouse_data'
-    ));
+        // Productos con poco stock
+        $low_stock_products = Product::where('stock', '<', 10)
+            ->where('is_active', true)
+            ->take(5)
+            ->get();
+
+        // Ventas mensuales (últimos 6 meses)
+        $monthly_sales = Invoice::select(
+                DB::raw('EXTRACT(MONTH FROM created_at) as month'),
+                DB::raw('EXTRACT(YEAR FROM created_at) as year'),
+                DB::raw('SUM(total) as total')
+            )
+            ->where('status', '!=', 'cancelled')
+            ->where('created_at', '>=', now()->subMonths(6))
+            ->groupBy('year', 'month')
+            ->orderBy('year', 'desc')
+            ->orderBy('month', 'desc')
+            ->get();
+
+        // Productos más vendidos
+        $top_products = DB::table('invoice_items')
+            ->join('invoices', 'invoice_items.invoice_id', '=', 'invoices.id')
+            ->join('products', 'invoice_items.product_id', '=', 'products.id')
+            ->where('invoices.status', '!=', 'cancelled')
+            ->select(
+                'products.name',
+                DB::raw('SUM(invoice_items.quantity) as total_sold'),
+                DB::raw('SUM(invoice_items.total) as total_revenue')
+            )
+            ->groupBy('products.id', 'products.name')
+            ->orderBy('total_sold', 'desc')
+            ->take(5)
+            ->get();
+
+        // Datos específicos para Secretario
+        $secretary_data = null;
+        if ($user->hasRole('Secretario')) {
+            $secretary_data = [
+                'new_clients_today' => Client::whereDate('created_at', today())->count(),
+                'new_clients_week' => Client::where('created_at', '>=', now()->subWeek())->count(),
+                'new_clients_month' => Client::where('created_at', '>=', now()->subMonth())->count(),
+                'pending_invoices' => Invoice::where('status', 'pending')->count(),
+                'overdue_invoices' => Invoice::where('status', 'overdue')->count(),
+                'recent_clients' => Client::latest()->take(8)->get(),
+                'client_growth' => $this->getClientGrowthData(),
+                'invoice_status_summary' => $this->getInvoiceStatusSummary(),
+                'top_clients' => $this->getTopClients(),
+                'client_communication_stats' => $this->getClientCommunicationStats(),
+                'upcoming_due_dates' => $this->getUpcomingDueDates(),
+                'client_activity' => $this->getClientActivity(),
+                'monthly_revenue_trend' => $this->getMonthlyRevenueTrend(),
+                'average_invoice_value' => $this->getAverageInvoiceValue(),
+                'clients_without_recent_activity' => $this->getClientsWithoutRecentActivity(),
+            ];
+        }
+
+        // Datos específicos para Bodega
+        $warehouse_data = null;
+        if ($user->hasRole('Bodega')) {
+            $warehouse_data = [
+                'critical_stock' => Product::where('stock', '<', 5)->where('is_active', true)->count(),
+                'out_of_stock' => Product::where('stock', 0)->where('is_active', true)->count(),
+                'total_stock_value' => Product::where('is_active', true)->sum(DB::raw('stock * price')),
+                'products_needing_restock' => Product::where('stock', '<', 10)->where('is_active', true)->take(10)->get(),
+                'low_stock_products' => Product::where('stock', '>', 0)->where('stock', '<', 10)->where('is_active', true)->get(),
+                'recent_stock_movements' => $this->getRecentStockMovements(),
+                'stock_by_category' => $this->getStockByCategory(),
+                'products_never_sold' => $this->getProductsNeverSold(),
+                'inventory_turnover' => $this->getInventoryTurnover(),
+                'stock_alerts' => $this->getSimpleStockAlerts(),
+                'inventory_summary' => $this->getSimpleInventorySummary(),
+                'cost_analysis' => $this->getCostAnalysis(),
+                'low_performing_products' => $this->getLowPerformingProducts(), // Agregado
+                'seasonal_trends' => $this->getSeasonalTrends(), // Agregado
+                'supplier_performance' => $this->getSupplierPerformance(), // Agregado
+            ];
+        }
+
+        return view('dashboard', compact(
+            'stats',
+            'recent_invoices',
+            'low_stock_products',
+            'monthly_sales',
+            'top_products',
+            'secretary_data',
+            'warehouse_data'
+        ));
     }
 
     private function getClientGrowthData()

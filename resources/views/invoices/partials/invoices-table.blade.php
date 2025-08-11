@@ -68,10 +68,10 @@
                             <i class="fas fa-eye"></i>
                         </a>
 
-                        @if($invoice->isActive() && $invoice->canBeCancelledBy(auth()->user()))
-                        <a href="{{ route('invoices.cancel', $invoice) }}" class="text-red-600 hover:text-red-900">
-                            <i class="fas fa-times-circle"></i>
-                        </a>
+                        @if($invoice->canBeDeletedBy(auth()->user()))
+                            <a href="{{ route('invoices.confirm-delete', $invoice) }}" class="text-red-600 hover:text-red-900">
+                                <i class="fas fa-times-circle"></i> 
+                            </a>
                         @endif
 
                         <a href="{{ route('invoices.pdf', $invoice) }}" class="text-green-600 hover:text-green-900">

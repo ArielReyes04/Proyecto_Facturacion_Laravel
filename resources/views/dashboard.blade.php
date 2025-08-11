@@ -98,7 +98,7 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 <!-- Últimas facturas -->
-                @role('Administrador|Ventas')
+                @role('Administrador|Ventas|Pagos')
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">

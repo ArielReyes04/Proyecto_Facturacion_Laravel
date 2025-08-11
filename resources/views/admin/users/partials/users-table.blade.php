@@ -27,6 +27,11 @@
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center space-x-2">
+                        <a href="{{ route('admin.users.tokens', $user->id) }}" 
+                            class="text-indigo-600 hover:text-indigo-900 transition-colors"
+                            title="Ver Tokens">
+                            <i class="fas fa-key"></i>
+                        </a>
                         <!-- Botón Editar -->
                         <a href="{{ route('admin.users.edit', $user) }}" 
                            class="inline-flex items-center px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-md transition-colors duration-200">

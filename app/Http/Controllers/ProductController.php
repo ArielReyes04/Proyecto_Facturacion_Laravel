@@ -303,4 +303,223 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
         return response()->json($product);
     }
+
+    // Obtener todos los productos
+    public function getProducts()
+    {
+        return response()->json(Product::all());
+    }
+
+    // Obtener un producto por ID
+    public function getProductById($id)
+    {
+        $product = Product::find($id);
+        if (!$product) {
+            return response()->json(['error' => 'Producto no encontrado'], 404);
+        }
+        return response()->json($product);
+    }
+
+    // Crear producto
+    public function createProduct(StoreProductRequest $request)
+    {
+        try {
+            $validated = $request->validated();
+
+            // Convertir coma a punto en el precio si existe
+            if (isset($validated['price'])) {
+                $validated['price'] = str_replace(',', '.', $validated['price']);
+            }
+
+            $product = Product::create($validated);
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'create',
+                'table_name' => 'products',
+                'record_id' => $product->id,
+                'old_values' => null,
+                'new_values' => json_encode($validated),
+            ]);
+
+            return response()->json([
+                'message' => 'Producto creado exitosamente.',
+                'product' => $product
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Error de validación.',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Actualizar producto
+    public function updateProduct(UpdateProductRequest $request, $id)
+    {
+        try {
+            $product = Product::find($id);
+
+            if (!$product) {
+                return response()->json(['error' => 'Producto no encontrado'], 404);
+            }
+
+            $validated = $request->validated();
+
+            // Convertir coma a punto en el precio si existe
+            if (isset($validated['price'])) {
+                $validated['price'] = str_replace(',', '.', $validated['price']);
+            }
+
+            $oldValues = $product->toArray();
+
+            $product->update($validated);
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'update',
+                'table_name' => 'products',
+                'record_id' => $product->id,
+                'old_values' => json_encode($oldValues),
+                'new_values' => json_encode($validated),
+            ]);
+
+            return response()->json([
+                'message' => 'Producto actualizado exitosamente.',
+                'product' => $product
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Error de validación.',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Eliminar (soft delete) producto
+    public function deleteProduct(DeleteProductRequest $request, $id)
+    {
+        try {
+            $product = Product::find($id);
+
+            if (!$product) {
+                return response()->json(['error' => 'Producto no encontrado'], 404);
+            }
+
+            $validated = $request->validated();
+
+            $oldValues = $product->toArray();
+
+            $product->delete();
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'delete',
+                'table_name' => 'products',
+                'record_id' => $product->id,
+                'old_values' => json_encode($oldValues),
+                'new_values' => json_encode([
+                    'razon' => $validated['razon'],
+                    'deleted_by' => Auth::user() ? Auth::user()->name : 'Sistema',
+                ]),
+            ]);
+
+            return response()->json([
+                'message' => 'Producto eliminado exitosamente.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Restaurar producto eliminado
+    public function restoreProduct(RestoreProductRequest $request, $id)
+    {
+        try {
+            $product = Product::withTrashed()->find($id);
+
+            if (!$product) {
+                return response()->json(['error' => 'Producto no encontrado'], 404);
+            }
+
+            $validated = $request->validated();
+
+            $product->restore();
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'restore',
+                'table_name' => 'products',
+                'record_id' => $product->id,
+                'old_values' => json_encode(['deleted_at' => $product->deleted_at]),
+                'new_values' => json_encode(['razon' => $validated['razon'], 'restored_by' => Auth::user()->name]),
+            ]);
+
+            return response()->json([
+                'message' => 'Producto restaurado exitosamente.',
+                'product' => $product
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Eliminar permanentemente producto
+    public function forceDeleteProduct(DeleteProductRequest $request, $id)
+    {
+        try {
+            $product = Product::withTrashed()->findOrFail($id);
+
+            $validated = $request->validated();
+
+            $oldValues = $product->toArray();
+
+            // Registrar en audit log antes de eliminar
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'force_delete',
+                'table_name' => 'products',
+                'record_id' => $product->id,
+                'old_values' => json_encode($oldValues),
+                'new_values' => json_encode([
+                    'razon' => $validated['razon'],
+                    'force_deleted_by' => Auth::user()->name,
+                ]),
+            ]);
+
+            $product->forceDelete();
+
+            return response()->json(['message' => 'Producto eliminado permanentemente.']);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

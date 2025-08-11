@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Sanctum\HasApiTokens;
-
-class Client extends Model
+use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+class Client extends Authenticatable
 {
-    use HasApiTokens, HasFactory, SoftDeletes;
-
+    use HasApiTokens, HasFactory, SoftDeletes, HasRoles;
+    protected $guard_name = 'web'; 
     protected $fillable = [
         'name',
         'email',

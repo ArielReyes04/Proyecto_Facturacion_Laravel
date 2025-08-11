@@ -24,6 +24,10 @@
                            class="text-sm font-medium {{ request()->routeIs('invoices.*') ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-600 hover:text-indigo-600' }}">
                             <i class="fas fa-file-invoice mr-1"></i> Facturas
                         </a>
+                        <a href="{{ route('payments.index') }}"
+                            class="text-sm font-medium {{ request()->routeIs('payments.*') ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-600 hover:text-indigo-600' }}">
+                                <i class="fas fa-credit-card mr-1"></i> Pagos
+                        </a>
                         <a href="{{ route('admin.users') }}"
                            class="text-sm font-medium {{ request()->routeIs('admin.users') ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-600 hover:text-indigo-600' }}">
                             <i class="fas fa-user-cog mr-1"></i> Usuarios
@@ -55,10 +59,17 @@
                         </a>
                     @endrole
 
-                    @role('Administrador|Pagos')
+                    @role('Pagos')
                         <a href="{{ route('payments.index') }}"
                         class="text-sm font-medium {{ request()->routeIs('payments.*') ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-600 hover:text-indigo-600' }}">
                             <i class="fas fa-credit-card mr-1"></i> Pagos
+                        </a>
+                    @endrole
+
+                    @role('Administrador')
+                        <a href="/telescope"
+                           class="text-sm font-medium {{ request()->routeIs('telescope.*') ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-600 hover:text-indigo-600' }}">
+                            <i class="fas fa-binoculars mr-1"></i> Telescope
                         </a>
                     @endrole
 

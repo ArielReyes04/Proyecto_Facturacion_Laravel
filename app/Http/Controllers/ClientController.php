@@ -65,6 +65,10 @@ class ClientController extends Controller
         // Crear cliente
         $client = Client::create($validated);
 
+        // Asignar rol "Cliente" al nuevo cliente
+        $client->assignRole('Cliente');
+
+
         // Registrar en audit log
         AuditLog::create([
             'user_id' => Auth::id(),
@@ -489,5 +493,227 @@ class ClientController extends Controller
             ->route('clients.tokens', ['id' => $client->id])
             ->with('token_generado', $plainTextToken);
     }
+
+    public function eliminarTokenAcceso(Request $request, Client $client, $tokenId)
+    {
+        $token = $client->tokens()->findOrFail($tokenId);
+        $token->delete();
+
+        return redirect()
+            ->route('clients.tokens', ['id' => $client->id])
+            ->with('success', 'Token eliminado exitosamente.');
+    }
+
+    public function getClient(){
+        return response()->json(Client::all());
+    }
+
+    public function getClientId($id){
+        $client = Client::find($id);
+        if (!$client) {
+            return response()->json(['error' => 'Cliente no encontrado'], 404);
+        }
+        return response()->json($client);
+    }
+
+    public function updateClient(UpdateClientRequest $request, $id)
+    {
+        try {
+            $client = Client::find($id);
+
+            if (!$client) {
+                return response()->json(['error' => 'Cliente no encontrado'], 404);
+            }
+
+            $validated = $request->validated();
+
+            $client->update($validated);
+
+            return response()->json([
+                'message' => 'Cliente actualizado exitosamente.',
+                'client' => $client
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Error de validación.',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    public function deleteClient(DeleteClientRequest $request, $id)
+    {
+        try {
+            $client = Client::find($id);
+
+            if (!$client) {
+                return response()->json(['error' => 'Cliente no encontrado'], 404);
+            }
+
+            // Registrar en audit log antes de eliminar
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'delete',
+                'table_name' => 'clients',
+                'record_id' => $client->id,
+                'old_values' => json_encode($client->toArray()),
+                'new_values' => json_encode(['razon' => $request->validated()['razon'], 'deleted_by' => Auth::user()->name]),
+            ]);
+
+            $client->delete();
+
+            return response()->json([
+                'message' => 'Cliente eliminado exitosamente.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    public function restoreClient(RestoreClientRequest $request, $id)
+    {
+        try {
+            $client = Client::withTrashed()->find($id);
+
+            if (!$client) {
+                return response()->json(['error' => 'Cliente no encontrado'], 404);
+            }
+
+            $client->restore();
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'restore',
+                'table_name' => 'clients',
+                'record_id' => $client->id,
+                'old_values' => json_encode(['deleted_at' => $client->deleted_at]),
+                'new_values' => json_encode(['razon' => $request->validated()['razon'], 'restored_by' => Auth::user()->name]),
+            ]);
+
+            return response()->json([
+                'message' => 'Cliente restaurado exitosamente.',
+                'client' => $client
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    public function forceDeleteClient(DeleteClientRequest $request, $id)
+    {
+        try {
+            $client = Client::withTrashed()->findOrFail($id);
+
+            // Guardar valores antes de eliminar
+            $oldValues = $client->toArray();
+
+            // Validación: ¿tiene facturas asociadas?
+            if ($client->invoices()->withTrashed()->exists()) {
+                return response()->json([
+                    'error' => 'No se puede eliminar permanentemente: el cliente tiene facturas asociadas.'
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            // Eliminar físicamente
+            $client->forceDelete();
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => auth()->id(),
+                'action' => 'force_delete',
+                'table_name' => 'clients',
+                'record_id' => $client->id,
+                'old_values' => json_encode($oldValues),
+                'new_values' => json_encode([
+                    'force_deleted_by' => auth()->user()->name,
+                    'reason' => $request->input('razon')
+                ]),
+            ]);
+
+            DB::commit();
+
+            return response()->json(['message' => 'Cliente eliminado permanentemente.']);
+
+        } catch (QueryException $e) {
+            DB::rollBack();
+            return response()->json([
+                'error' => 'Error al eliminar permanentemente: ' . $e->getMessage()
+            ], 500);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function createClient(StoreClientRequest $request)
+    {
+        try {
+            $validated = $request->validated();
+
+            // Crear cliente
+            $client = Client::create($validated);
+
+            $client->assignRole('Cliente');
+
+            // Registrar en audit log
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'create',
+                'table_name' => 'clients',
+                'record_id' => $client->id,
+                'old_values' => null,
+                'new_values' => json_encode($validated),
+            ]);
+
+            return response()->json([
+                'message' => 'Cliente creado exitosamente.',
+                'client' => $client
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Error de validación
+            return response()->json([
+                'error' => 'Error de validación.',
+                'details' => $e->errors()
+            ], 422);
+
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Error en base de datos
+            return response()->json([
+                'error' => 'Error en base de datos.',
+                'details' => $e->getMessage()
+            ], 500);
+
+        } catch (\Exception $e) {
+            // Cualquier otro error inesperado
+            return response()->json([
+                'error' => 'Ocurrió un error inesperado.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
 
 }

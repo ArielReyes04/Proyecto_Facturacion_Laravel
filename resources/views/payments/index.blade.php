@@ -1,8 +1,18 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-yellow-500 leading-tight">
-            {{ __('Gestión de Pagos') }}
-        </h2>
+        <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-xl text-yellow-500 leading-tight">
+                {{ __('Gestión de Pagos') }}
+            </h2>
+            <div class="flex space-x-2">
+                <a href="{{ route('payments.create') }}" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center">
+                    <i class="fas fa-plus mr-2"></i> Nuevo Pago
+                </a>
+                <a href="{{ route('payments.eliminados') }}" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center">
+                    <i class="fas fa-trash-alt mr-2"></i> Papelera
+                </a>
+            </div>
+        </div>
     </x-slot>
 
     <div class="py-6 max-w-7xl mx-auto sm:px-6 lg:px-8">
@@ -61,6 +71,7 @@
             <p class="text-gray-500 mb-6">No hay pagos pendientes por validar.</p>
         @else
             @include('payments.partials.pending-table', ['payments' => $pendingPayments])
+            {{ $pendingPayments->appends(request()->except('pending_page'))->links('payments.partials.pagination', ['paginator' => $pendingPayments, 'pageName' => 'pending_page']) }}
         @endif
 
         <h3 class="text-lg font-medium mt-8 mb-2">Historial de Pagos (Aprobados/Rechazados)</h3>
@@ -68,10 +79,8 @@
             <p class="text-gray-500">No hay pagos procesados.</p>
         @else
             @include('payments.partials.processed-table', ['payments' => $processedPayments])
+            {{ $processedPayments->appends(request()->except('processed_page'))->links('payments.partials.pagination', ['paginator' => $processedPayments, 'pageName' => 'processed_page']) }}
         @endif
-
-        {{-- Paginación --}}
-        @include('payments.partials.pagination', ['payments' => $payments])
 
     </div>
 </x-app-layout>

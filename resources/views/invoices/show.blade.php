@@ -14,11 +14,7 @@
                         <i class="fas fa-envelope mr-2"></i> Enviar por Email
                     </button>
                 </form>
-                @if($invoice->isActive() && $invoice->canBeCancelledBy(auth()->user()))
-                    <a href="{{ route('invoices.cancel', $invoice) }}" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                        <i class="fas fa-times-circle mr-2"></i> Cancelar
-                    </a>
-                @endif
+                
                 @if($invoice->canBeDeletedBy(auth()->user()))
                     <a href="{{ route('invoices.confirm-delete', $invoice) }}" class="bg-red-600 hover:bg-red-800 text-white font-bold py-2 px-4 rounded">
                         <i class="fas fa-trash mr-2"></i> Eliminar
