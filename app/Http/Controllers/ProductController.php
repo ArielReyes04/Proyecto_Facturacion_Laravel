@@ -12,7 +12,7 @@ use App\Http\Requests\ForceDeleteProductRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
-
+use Illuminate\Support\Facades\DB;
 class ProductController extends Controller
 {
     public function index(Request $request)
@@ -181,23 +181,44 @@ class ProductController extends Controller
     {
         $validated = $request->validated();
 
-        $product = Product::withTrashed()->findOrFail($id);
-        $oldValues = $product->toArray();
+        DB::beginTransaction(); // Iniciar transacción
 
-        // Registrar en audit log antes de eliminar
-        AuditLog::create([
-            'user_id' => Auth::id(),
-            'action' => 'force_delete',
-            'table_name' => 'products',
-            'record_id' => $product->id,
-            'old_values' => json_encode($oldValues),
-            'new_values' => json_encode(['razon' => $validated['razon'], 'force_deleted_by' => Auth::user()->name]),
-        ]);
+        try {
+            $product = Product::withTrashed()->findOrFail($id);
+            $oldValues = $product->toArray();
 
-        $product->forceDelete();
+            // Registrar en audit log antes de eliminar
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'force_delete',
+                'table_name' => 'products',
+                'record_id' => $product->id,
+                'old_values' => json_encode($oldValues),
+                'new_values' => json_encode([
+                    'razon' => $validated['razon'],
+                    'force_deleted_by' => Auth::user()->name
+                ]),
+            ]);
 
-        return redirect()->route('products.index')->with('success', 'Producto eliminado permanentemente.');
+            // Intentar eliminación permanente
+            $product->forceDelete();
+
+            DB::commit(); // Confirmar transacción
+
+            return redirect()->route('products.index')->with('success', 'Producto eliminado permanentemente.');
+        } catch (\Exception $e) {
+            DB::rollback(); // Revertir transacción en caso de error
+
+            // Retornar mensaje de error amigable si tiene relaciones
+            $errorMessage = 'No se pudo eliminar el producto.';
+            if (str_contains($e->getMessage(), 'FOREIGN KEY')) {
+                $errorMessage .= ' El producto tiene facturas asociadas.';
+            }
+
+            return redirect()->route('products.index')->with('error', $errorMessage);
+        }
     }
+
 
     public function eliminados(Request $request)
     {
@@ -491,11 +512,12 @@ class ProductController extends Controller
     // Eliminar permanentemente producto
     public function forceDeleteProduct(DeleteProductRequest $request, $id)
     {
+        $validated = $request->validated();
+
+        DB::beginTransaction(); // Iniciar transacción
+
         try {
             $product = Product::withTrashed()->findOrFail($id);
-
-            $validated = $request->validated();
-
             $oldValues = $product->toArray();
 
             // Registrar en audit log antes de eliminar
@@ -511,15 +533,26 @@ class ProductController extends Controller
                 ]),
             ]);
 
+            // Intentar eliminación permanente
             $product->forceDelete();
+
+            DB::commit(); // Confirmar transacción
 
             return response()->json(['message' => 'Producto eliminado permanentemente.']);
 
         } catch (\Exception $e) {
+            DB::rollback(); // Revertir transacción en caso de error
+
+            $errorMessage = 'No se pudo eliminar el producto.';
+            if (str_contains($e->getMessage(), 'FOREIGN KEY')) {
+                $errorMessage .= ' El producto tiene facturas asociadas.';
+            }
+
             return response()->json([
-                'error' => 'Ocurrió un error inesperado.',
+                'error' => $errorMessage,
                 'details' => $e->getMessage()
             ], 500);
         }
     }
+
 }

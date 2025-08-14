@@ -668,7 +668,7 @@ public function restore(RestoreInvoiceRequest $request, $id)
     public function deleteInvoice(DeleteInvoiceRequest $request, $id)
     {
         try {
-            $invoice = Invoice::find($id);
+            $invoice = Invoice::with('items')->find($id);
 
             if (!$invoice) {
                 return response()->json(['error' => 'Factura no encontrada'], 404);
@@ -678,7 +678,9 @@ public function restore(RestoreInvoiceRequest $request, $id)
 
             // Restaurar stock si la factura está activa
             if ($invoice->status === 'active') {
-                foreach ($invoice->items as $item) {
+                $items = $invoice->items()->get();
+                /** @var \App\Models\InvoiceItem $item */
+                foreach ($items as $item) {
                     $product = Product::find($item->product_id);
                     if ($product) {
                         $product->increment('stock', $item->quantity);
@@ -729,7 +731,9 @@ public function restore(RestoreInvoiceRequest $request, $id)
             $validated = $request->validated();
 
             // Verificar stock suficiente para restaurar
-            foreach ($invoice->items as $item) {
+            $items = $invoice->items()->get();
+            /** @var \App\Models\InvoiceItem $item */
+            foreach ($items as $item) {
                 $product = Product::find($item->product_id);
                 if ($product && $product->stock < $item->quantity) {
                     return response()->json([
@@ -739,7 +743,8 @@ public function restore(RestoreInvoiceRequest $request, $id)
             }
 
             // Reducir stock nuevamente
-            foreach ($invoice->items as $item) {
+            /** @var \App\Models\InvoiceItem $item */
+            foreach ($items as $item) {
                 $product = Product::find($item->product_id);
                 if ($product) {
                     $product->decrement('stock', $item->quantity);

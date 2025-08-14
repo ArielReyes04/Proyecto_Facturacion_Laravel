@@ -141,7 +141,7 @@ class PagosControlador extends Controller
             'record_id' => $payment->id,
             'old_values' => json_encode($oldValues),
             'new_values' => json_encode([
-                'reason' => $request->input('reason')
+                'reason' => $request->validated()['reason'] ?? null
             ]),
         ]);
 
@@ -162,7 +162,7 @@ class PagosControlador extends Controller
             'old_values' => json_encode(['deleted_at' => $payment->deleted_at]),
             'new_values' => json_encode([
                 'restored_by' => Auth::user()->name,
-                'reason' => $request->input('reason')
+                'reason' => $request->validated()['reason'] ?? null
             ]),
         ]);
 
@@ -183,7 +183,7 @@ class PagosControlador extends Controller
             'old_values' => json_encode($oldValues),
             'new_values' => json_encode([
                 'force_deleted_by' => Auth::user()->name,
-                'reason' => $request->input('reason')
+                'reason' => $request->validated()['reason'] ?? null
             ]),
         ]);
 
@@ -195,7 +195,7 @@ class PagosControlador extends Controller
     // Aprobar pago
     public function approve(Request $request, $id)
     {
-        $payment = Pago::findOrFail($id);
+        $payment = Pago::with('invoice')->findOrFail($id);
 
         if ($payment->status !== 'pendiente') {
             return redirect()->route('payments.index')->with('error', 'El pago no está en estado pendiente.');
@@ -203,17 +203,21 @@ class PagosControlador extends Controller
 
         DB::beginTransaction();
         try {
+            $observations = $request->get('observations', '');
             $payment->update([
                 'status' => 'aprobado',
-                'observations' => trim(($payment->observations ?? '') . "\nObservaciones de aprobación: " . ($request->input('observations') ?? '')),
+                'observations' => trim(($payment->observations ?? '') . "\nObservaciones de aprobación: " . ($observations)),
                 'validated_by' => Auth::id(),
                 'validated_at' => now(),
             ]);
 
-            $payment->invoice->update(['status' => 'pagado']);
-            $payment->invoice->load(['client', 'user', 'items.product']);
+            $invoice = $payment->invoice()->first();
+            if ($invoice instanceof \App\Models\Invoice) {
+                $invoice->update(['status' => 'pagado']);
+                $invoice->load(['client', 'user', 'items.product']);
 
-            Mail::to($payment->invoice->client->email)->send(new InvoiceMail($payment->invoice));
+                Mail::to($invoice->client->email)->send(new InvoiceMail($invoice));
+            }
             AuditLog::create([
                 'user_id' => Auth::id(),
                 'action' => 'approve',
@@ -237,7 +241,7 @@ class PagosControlador extends Controller
     // Rechazar pago
     public function reject(Request $request, $id)
     {
-        $payment = Pago::findOrFail($id);
+        $payment = Pago::with('invoice')->findOrFail($id);
 
         if ($payment->status !== 'pendiente') {
             return redirect()->route('payments.index')->with('error', 'El pago no está en estado pendiente.');
@@ -247,7 +251,7 @@ class PagosControlador extends Controller
         try {
             $now = now();
             $userId = Auth::id();
-            $reason = $request->input('rejection_reason') ?? 'No especificado';
+            $reason = $request->get('rejection_reason', 'No especificado');
 
             // Actualizar pago
             $payment->update([
@@ -261,15 +265,18 @@ class PagosControlador extends Controller
             ]);
             
             // Actualizar factura relacionada
-            $payment->invoice->update([
-                'status' => 'cancelado',
-                'cancelled_at' => $now,
-                'cancelled_by' => $userId,
-                'cancellation_reason' => $reason,
-            ]);
-            $payment->invoice->load(['client', 'user', 'items.product']);
+            $invoice = $payment->invoice()->first();
+            if ($invoice instanceof \App\Models\Invoice) {
+                $invoice->update([
+                    'status' => 'cancelado',
+                    'cancelled_at' => $now,
+                    'cancelled_by' => $userId,
+                    'cancellation_reason' => $reason,
+                ]);
+                $invoice->load(['client', 'user', 'items.product']);
 
-            Mail::to($payment->invoice->client->email)->send(new InvoiceMail($payment->invoice));
+                Mail::to($invoice->client->email)->send(new InvoiceMail($invoice));
+            }
             AuditLog::create([
                 'user_id' => $userId,
                 'action' => 'reject',

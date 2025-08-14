@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\Invoice;
 use App\Models\AuditLog;
 use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
@@ -163,8 +164,8 @@ class ClientController extends Controller
         $razon = $request->validated()['razon'] ?? null;
 
         // VALIDACIÓN: ¿tiene facturas asociadas?
-        // Uso withTrashed() en invoices() para contar incluso facturas ya "soft-deleted".
-        if ($client->invoices()->withTrashed()->exists()) {
+        // Uso withTrashed() para contar incluso facturas ya "soft-deleted".
+        if (Invoice::withTrashed()->where('client_id', $client->id)->exists()) {
             return redirect()->route('clients.index')
                 ->with('error', 'No se puede eliminar permanentemente: el cliente tiene facturas asociadas.');
         }
@@ -176,14 +177,14 @@ class ClientController extends Controller
 
             // Registrar en audit log **después** de la eliminación exitosa
             AuditLog::create([
-                'user_id' => auth()->id(),
+                'user_id' => Auth::id(),
                 'action' => 'force_delete',
                 'table_name' => 'clients',
                 'record_id' => $clientId,
                 'old_values' => json_encode($oldValues),
                 'new_values' => json_encode([
                     'razon' => $razon,
-                    'force_deleted_by' => auth()->user()->name,
+                    'force_deleted_by' => Auth::user()->name,
                 ]),
             ]);
 
@@ -623,9 +624,10 @@ class ClientController extends Controller
 
             // Guardar valores antes de eliminar
             $oldValues = $client->toArray();
+            $clientId = $client->id;
 
             // Validación: ¿tiene facturas asociadas?
-            if ($client->invoices()->withTrashed()->exists()) {
+            if (Invoice::withTrashed()->where('client_id', $client->id)->exists()) {
                 return response()->json([
                     'error' => 'No se puede eliminar permanentemente: el cliente tiene facturas asociadas.'
                 ], 400);
@@ -638,14 +640,14 @@ class ClientController extends Controller
 
             // Registrar en audit log
             AuditLog::create([
-                'user_id' => auth()->id(),
+                'user_id' => Auth::id(),
                 'action' => 'force_delete',
                 'table_name' => 'clients',
-                'record_id' => $client->id,
+                'record_id' => $clientId,
                 'old_values' => json_encode($oldValues),
                 'new_values' => json_encode([
-                    'force_deleted_by' => auth()->user()->name,
-                    'reason' => $request->input('razon')
+                    'force_deleted_by' => Auth::user()->name,
+                    'reason' => $request->validated()['razon'] ?? null
                 ]),
             ]);
 

@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
 class Pago extends Model
 {
     use HasFactory, SoftDeletes;
@@ -19,7 +21,7 @@ class Pago extends Model
     /**
      * The attributes that are mass assignable.
      *
-     * @var array
+     * @var list<string>
      */
     protected $fillable = [
         'invoice_id',
@@ -36,7 +38,7 @@ class Pago extends Model
     /**
      * The attributes that should be cast.
      *
-     * @var array
+     * @var array<string, string>
      */
     protected $casts = [
         'payment_type' => 'string',
@@ -48,7 +50,7 @@ class Pago extends Model
     /**
      * Get the invoice that owns the payment.
      */
-    public function invoice()
+    public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'invoice_id');
     }
@@ -56,7 +58,7 @@ class Pago extends Model
     /**
      * Get the user who made the payment.
      */
-    public function payer()
+    public function payer(): BelongsTo
     {
         return $this->belongsTo(Client::class, 'paid_by');
     }
@@ -64,7 +66,7 @@ class Pago extends Model
     /**
      * Get the user who validated the payment.
      */
-    public function validator()
+    public function validator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'validated_by');
     }
