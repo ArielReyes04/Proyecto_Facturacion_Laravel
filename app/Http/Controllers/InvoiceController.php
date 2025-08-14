@@ -187,7 +187,7 @@ class InvoiceController extends Controller
         }
 
         if ($invoice->isCancelled()) {
-            return back()->withErrors(['error' => 'Esta factura ya está cancelada.']);
+            return back()->withErrors(['error' => 'Esta factura ya está cancelada o pagada.']);
         }
 
         $validated = $request->validated();
@@ -290,6 +290,18 @@ class InvoiceController extends Controller
                 abort(403, 'No tienes autorización para eliminar esta factura.');
             }
 
+            // 🚫 Validar que la factura no esté cancelada o pagada
+            if (in_array(strtolower($invoice->status), ['cancelado', 'pagado'])) {
+                Log::warning('Intento de eliminar factura no permitida por estado', [
+                    'user' => Auth::id(),
+                    'invoice' => $invoice->id,
+                    'status' => $invoice->status
+                ]);
+                return redirect()
+                    ->route('invoices.show', $invoice)
+                    ->with('error', 'No se puede eliminar una factura que ya está ' . strtolower($invoice->status) . '.');
+            }
+
             // Cargar relaciones necesarias para la vista
             $invoice->load(['client', 'user', 'items.product']);
 
@@ -307,6 +319,7 @@ class InvoiceController extends Controller
                 ->with('error', 'Error al cargar la página de confirmación: ' . $e->getMessage());
         }
     }
+
 
     public function confirmDestroy(DeleteInvoiceRequest $request, Invoice $invoice)
     {
@@ -343,7 +356,7 @@ class InvoiceController extends Controller
                     }
                     $stockMessage = 'Stock restaurado.';
                 } else {
-                    $stockMessage = 'No se restauró stock (factura ya cancelada).';
+                    $stockMessage = 'No se restauró stock (factura ya cancelada o aprovada).';
                 }
 
                 Log::info('Stock procesado');
@@ -674,10 +687,17 @@ public function restore(RestoreInvoiceRequest $request, $id)
                 return response()->json(['error' => 'Factura no encontrada'], 404);
             }
 
+            // 🚫 Validar que la factura no esté cancelada o pagada
+            if (in_array(strtolower($invoice->status), ['cancelado', 'pagado'])) {
+                return response()->json([
+                    'error' => 'No se puede eliminar una factura que ya está ' . strtolower($invoice->status) . '.'
+                ], 400);
+            }
+
             $validated = $request->validated();
 
             // Restaurar stock si la factura está activa
-            if ($invoice->status === 'active') {
+            if (strtolower($invoice->status) === 'active') {
                 $items = $invoice->items()->get();
                 /** @var \App\Models\InvoiceItem $item */
                 foreach ($items as $item) {
@@ -717,6 +737,7 @@ public function restore(RestoreInvoiceRequest $request, $id)
             ], 500);
         }
     }
+
 
     // Restaurar factura eliminada vía API
     public function restoreInvoice(RestoreInvoiceRequest $request, $id)
